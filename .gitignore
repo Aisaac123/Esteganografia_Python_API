@@ -2,4 +2,6 @@
 generated_audios
 generated_images
 .idea
-app/__pycache__
+__pycache__/
+*.pyc
+*.pyo
