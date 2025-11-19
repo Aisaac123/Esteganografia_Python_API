@@ -51,6 +51,7 @@ async def embed_image_message(
         file_type="image"
     )
 
+
 @router.post("/stego/extract", response_model=ExtractResponse)
 async def extract_image_message(image: UploadFile = File(...)):
     """Extraer mensaje oculto de imagen"""
@@ -58,14 +59,42 @@ async def extract_image_message(image: UploadFile = File(...)):
         raise HTTPException(400, "Solo se permiten imágenes")
 
     input_path = save_upload_file(image)
-    extracted_message = lsb.reveal(input_path)
-    os.unlink(input_path)
 
-    return ExtractResponse(
-        status="success",
-        message=extracted_message,
-        message_length=len(extracted_message) if extracted_message else 0
-    )
+    try:
+        # Intentar extraer el mensaje
+        extracted_message = lsb.reveal(input_path)
+
+        # Verificar si realmente hay un mensaje
+        if extracted_message is None or extracted_message == "":
+            return ExtractResponse(
+                status="success",
+                message="",
+                message_length=0,
+                notes="No se encontró ningún mensaje oculto en la imagen"
+            )
+
+        os.unlink(input_path)
+
+        return ExtractResponse(
+            status="success",
+            message=extracted_message,
+            message_length=len(extracted_message)
+        )
+
+    except IndexError as e:
+        # Error específico de stegano cuando no puede detectar mensaje
+        os.unlink(input_path)
+        return ExtractResponse(
+            status="success",
+            message="",
+            message_length=0,
+            notes="La imagen no contiene un mensaje oculto o está corrupta"
+        )
+    except Exception as e:
+        os.unlink(input_path)
+        # Log del error para debugging
+        print(f"Error extracting message: {str(e)}")
+        raise HTTPException(500, f"Error al procesar la imagen: {str(e)}")
 
 @router.post("/steganalysis/analyze", response_model=SteganalysisResponse)
 async def analyze_image(image: UploadFile = File(...)):

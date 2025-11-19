@@ -17,6 +17,7 @@ class ExtractResponse(BaseModel):
     status: str
     message: Optional[str]
     message_length: int
+    notes: Optional[str] = None
 
 class MetricDetail(BaseModel):
     name: str
