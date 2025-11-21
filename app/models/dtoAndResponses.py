@@ -13,11 +13,27 @@ class EmbedResponse(BaseModel):
     capacity_used: float
     file_type: str
 
+# Modelos de respuesta
 class ExtractResponse(BaseModel):
     status: str
-    message: Optional[str]
+    message: str
     message_length: int
-    notes: Optional[str] = None
+    notes: str = None
+
+class BatchExtractItem(BaseModel):
+    index: int
+    filename: str
+    status: str
+    message: str
+    message_length: int
+    notes: str = None
+    error: str = None
+
+class BatchExtractResponse(BaseModel):
+    total: int
+    successful: int
+    failed: int
+    results: List[BatchExtractItem]
 
 class MetricDetail(BaseModel):
     name: str

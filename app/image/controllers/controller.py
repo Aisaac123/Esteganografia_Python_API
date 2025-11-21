@@ -1,3 +1,7 @@
+import asyncio
+import concurrent
+from typing import List
+
 from fastapi import UploadFile, File, HTTPException, Depends, APIRouter
 import os
 
@@ -10,7 +14,8 @@ from stegano import lsb
 
 from app.image.service.service import AdvancedSteganalysisEngine
 from app.libs.utils import save_upload_file, calculate_image_capacity, file_to_base64
-from app.models.dtoAndResponses import EmbedRequest, EmbedResponse, ExtractResponse, SteganalysisResponse, MetricDetail
+from app.models.dtoAndResponses import EmbedRequest, EmbedResponse, ExtractResponse, SteganalysisResponse, MetricDetail, \
+    BatchExtractResponse, BatchExtractItem
 
 OUTPUT_DIR = "generated_images"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -61,10 +66,8 @@ async def extract_image_message(image: UploadFile = File(...)):
     input_path = save_upload_file(image)
 
     try:
-        # Intentar extraer el mensaje
         extracted_message = lsb.reveal(input_path)
 
-        # Verificar si realmente hay un mensaje
         if extracted_message is None or extracted_message == "":
             return ExtractResponse(
                 status="success",
@@ -82,7 +85,6 @@ async def extract_image_message(image: UploadFile = File(...)):
         )
 
     except IndexError as e:
-        # Error específico de stegano cuando no puede detectar mensaje
         os.unlink(input_path)
         return ExtractResponse(
             status="success",
@@ -92,9 +94,144 @@ async def extract_image_message(image: UploadFile = File(...)):
         )
     except Exception as e:
         os.unlink(input_path)
-        # Log del error para debugging
         print(f"Error extracting message: {str(e)}")
         raise HTTPException(500, f"Error al procesar la imagen: {str(e)}")
+
+
+# ========================================
+# NUEVO: ENDPOINT DE EXTRACCIÓN POR LOTES (BATCH)
+# ========================================
+@router.post("/stego/extract-batch", response_model=BatchExtractResponse)
+async def extract_batch_messages(images: List[UploadFile] = File(...)):
+    """
+    Extraer mensajes ocultos de múltiples imágenes en paralelo
+
+    Límite recomendado: 50 imágenes por request
+    """
+
+    # Validar límite de imágenes
+    if len(images) > 50:
+        raise HTTPException(400, "Máximo 50 imágenes por request")
+
+    # Validar que todas sean imágenes
+    for idx, image in enumerate(images):
+        if not image.content_type.startswith("image/"):
+            raise HTTPException(400, f"El archivo en posición {idx} no es una imagen válida")
+
+    # Procesar en paralelo usando ThreadPoolExecutor
+    loop = asyncio.get_event_loop()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Crear tareas para cada imagen
+        tasks = [
+            loop.run_in_executor(
+                executor,
+                process_single_image,
+                idx,
+                image
+            )
+            for idx, image in enumerate(images)
+        ]
+
+        # Esperar todas las tareas
+        results = await asyncio.gather(*tasks)
+
+    # Contar éxitos y fallos
+    successful = sum(1 for r in results if r.status == "success" and not r.error)
+    failed = sum(1 for r in results if r.error)
+
+    return BatchExtractResponse(
+        total=len(images),
+        successful=successful,
+        failed=failed,
+        results=results
+    )
+
+
+# ========================================
+# FUNCIÓN AUXILIAR: Procesar una imagen individual
+# ========================================
+def process_single_image(index: int, image: UploadFile) -> BatchExtractItem:
+    """
+    Procesa una imagen individual de forma síncrona
+    Esta función se ejecutará en un thread separado
+    """
+    input_path = None
+
+    try:
+        # Guardar archivo temporal
+        input_path = save_upload_file(image)
+
+        # Extraer mensaje
+        extracted_message = lsb.reveal(input_path)
+
+        # Limpiar archivo temporal
+        if input_path and os.path.exists(input_path):
+            os.unlink(input_path)
+
+        # Sin mensaje oculto
+        if extracted_message is None or extracted_message == "":
+            return BatchExtractItem(
+                index=index,
+                filename=image.filename,
+                status="success",
+                message="",
+                message_length=0,
+                notes="No se encontró ningún mensaje oculto"
+            )
+
+        # Mensaje extraído exitosamente
+        return BatchExtractItem(
+            index=index,
+            filename=image.filename,
+            status="success",
+            message=extracted_message,
+            message_length=len(extracted_message)
+        )
+
+    except IndexError:
+        # Limpiar archivo temporal
+        if input_path and os.path.exists(input_path):
+            os.unlink(input_path)
+
+        return BatchExtractItem(
+            index=index,
+            filename=image.filename,
+            status="success",
+            message="",
+            message_length=0,
+            notes="La imagen no contiene un mensaje oculto o está corrupta"
+        )
+
+    except Exception as e:
+        # Limpiar archivo temporal
+        if input_path and os.path.exists(input_path):
+            os.unlink(input_path)
+
+        return BatchExtractItem(
+            index=index,
+            filename=image.filename,
+            status="error",
+            message="",
+            message_length=0,
+            error=str(e)
+        )
+
+
+# ========================================
+# FUNCIÓN AUXILIAR: Guardar archivo subido
+# ========================================
+def save_upload_file(upload_file: UploadFile) -> str:
+    """Guarda el archivo subido temporalmente y retorna la ruta"""
+    import tempfile
+    import shutil
+
+    # Crear archivo temporal
+    suffix = os.path.splitext(upload_file.filename)[1]
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(upload_file.file, tmp)
+        return tmp.name
 
 @router.post("/steganalysis/analyze", response_model=SteganalysisResponse)
 async def analyze_image(image: UploadFile = File(...)):
