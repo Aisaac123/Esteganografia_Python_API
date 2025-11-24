@@ -1,23 +1,24 @@
 # FastAPI y servidor
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-aiofiles==23.2.1
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
 
 # Steganografía
-stegano==0.11.3
-Pillow==10.1.0
+stegano
+Pillow
 
 # Stegoanálisis y procesamiento
-numpy==1.26.2
-scipy==1.11.4
-scikit-image==0.22.0
-opencv-python==4.8.1.78
+numpy
+scipy
+scikit-image
+opencv-python
 
 # Audio processing (NUEVAS LIBRERÍAS)
-pydub==0.25.1
-librosa==0.10.1
+pydub
+librosa
 
 # Utilidades
-pandas==2.1.3
-pydantic==2.5.0
+pandas
+pydantic
+cryptography
