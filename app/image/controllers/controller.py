@@ -3,7 +3,7 @@ import base64
 import concurrent
 from typing import List
 
-from fastapi import UploadFile, File, HTTPException, Depends, APIRouter
+from fastapi import UploadFile, File, HTTPException, Depends, APIRouter, Form
 import os
 
 import time
@@ -26,7 +26,8 @@ router = APIRouter(prefix="/image", tags=["Audio Steganography"])
 @router.post("/stego/embed", response_model=EmbedResponse)
 async def embed_image_message(
     image: UploadFile = File(...),
-    data: EmbedRequest = Depends()
+        message: str = Form(...),
+        user_email: str = Form(default="anonymous@keynography.com")
 ):
     """Ocultar mensaje en imagen usando LSB"""
     if not image.content_type.startswith("image/"):
@@ -34,7 +35,7 @@ async def embed_image_message(
 
     input_path = save_upload_file(image)
     capacity = calculate_image_capacity(input_path)
-    message_size = len(data.message.encode('utf-8'))
+    message_size = len(message.encode('utf-8'))
 
     if message_size > capacity:
         os.unlink(input_path)
@@ -43,7 +44,7 @@ async def embed_image_message(
     filename = f"stego_image_{int(time.time())}.png"
     output_path = os.path.join(OUTPUT_DIR, filename)
 
-    secret_img = lsb.hide(input_path, data.message)
+    secret_img = lsb.hide(input_path, message)
     secret_img.save(output_path)
     os.unlink(input_path)
 
@@ -52,7 +53,7 @@ async def embed_image_message(
 
     # Subir a S3
     try:
-        upload_to_s3(output_path, filename, data.user_email, "image")
+        upload_to_s3(output_path, filename, user_email, "image")
     except Exception as e:
         print(f"⚠️ Error subiendo a S3: {e}")
     finally:

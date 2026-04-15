@@ -30,7 +30,8 @@ from app.models.dtoAndResponses import (
 @router.post("/stego/embed", response_model=EmbedResponse)
 async def embed_audio_message(
     audio: UploadFile = File(...),
-    data: EmbedRequest = Depends()
+    message: str = Form(...),
+    user_email: str = Form(default="anonymous@keynography.com")
 ):
     """Ocultar mensaje en audio usando LSB"""
     if not audio.content_type.startswith("audio/"):
@@ -38,7 +39,7 @@ async def embed_audio_message(
 
     input_path = save_upload_file(audio, ".wav")
     capacity = calculate_audio_capacity(input_path)
-    message_size = len(data.message.encode('utf-8'))
+    message_size = len(message.encode('utf-8'))
 
     if message_size > capacity:
         os.unlink(input_path)
@@ -47,7 +48,7 @@ async def embed_audio_message(
     filename = f"stego_audio_{int(time.time())}.wav"
     output_path = os.path.join(OUTPUT_DIR, filename)
 
-    success = AudioSteganographyEngine.hide_message(input_path, data.message, output_path)
+    success = AudioSteganographyEngine.hide_message(input_path, message, output_path)
     os.unlink(input_path)
 
     if not success:
@@ -58,7 +59,7 @@ async def embed_audio_message(
 
     # Subir a S3
     try:
-        upload_to_s3(output_path, filename, data.user_email, "audio")
+        upload_to_s3(output_path, filename, user_email, "audio")
     except Exception as e:
         print(f"⚠️ Error subiendo a S3: {e}")
     finally:
