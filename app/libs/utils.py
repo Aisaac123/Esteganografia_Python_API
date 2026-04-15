@@ -25,6 +25,30 @@ def save_upload_file(upload_file: UploadFile, suffix: str = ".png") -> str:
     tmp.close()
     return tmp.name
 
+import boto3
+
+def upload_to_s3(file_path: str, filename: str, user_email: str, file_type: str) -> str:
+    """Sube archivo a S3 y retorna la URL prefirmada"""
+    bucket_name = os.environ.get("S3_BUCKET_NAME", "keynography-stego-files")
+    folder = "images" if file_type == "image" else "audios"
+    s3_key = f"{folder}/{filename}"
+
+    s3_client = boto3.client("s3", region_name="us-east-1")
+
+    s3_client.upload_file(
+        file_path,
+        bucket_name,
+        s3_key,
+        ExtraArgs={
+            "Metadata": {
+                "user_email": user_email,
+                "file_type": file_type
+            }
+        }
+    )
+
+    return s3_key
+
 
 def calculate_image_capacity(image_path: str) -> int:
     img = Image.open(image_path)

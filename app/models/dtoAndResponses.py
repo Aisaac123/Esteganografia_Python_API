@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List
 
 class EmbedRequest(BaseModel):
     message: str
+    user_email: str
 
 class EmbedResponse(BaseModel):
     status: str

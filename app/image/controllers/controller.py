@@ -14,7 +14,7 @@ from PIL import Image
 from stegano import lsb
 
 from app.image.service.service import AdvancedSteganalysisEngine
-from app.libs.utils import save_upload_file, calculate_image_capacity, file_to_base64
+from app.libs.utils import save_upload_file, calculate_image_capacity, file_to_base64, upload_to_s3
 from app.models.dtoAndResponses import EmbedRequest, EmbedResponse, ExtractResponse, SteganalysisResponse, MetricDetail, \
     BatchExtractResponse, BatchExtractItem, BatchDocumentExtractResponse, BatchDocumentExtractItem
 
@@ -24,7 +24,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 router = APIRouter(prefix="/image", tags=["Audio Steganography"])
 
 @router.post("/stego/embed", response_model=EmbedResponse)
-
 async def embed_image_message(
     image: UploadFile = File(...),
     data: EmbedRequest = Depends()
@@ -48,15 +47,27 @@ async def embed_image_message(
     secret_img.save(output_path)
     os.unlink(input_path)
 
+    # Leer base64 antes de subir a S3
+    file_b64 = file_to_base64(output_path)
+
+    # Subir a S3
+    try:
+        upload_to_s3(output_path, filename, data.user_email, "image")
+    except Exception as e:
+        print(f"⚠️ Error subiendo a S3: {e}")
+    finally:
+        # Limpiar archivo local siempre
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+
     return EmbedResponse(
         status="success",
         message="Mensaje ocultado exitosamente en imagen",
-        file_base64=file_to_base64(output_path),
+        file_base64=file_b64,
         payload_size=message_size,
         capacity_used=round((message_size / capacity) * 100, 2),
         file_type="image"
     )
-
 
 @router.post("/stego/extract", response_model=ExtractResponse)
 async def extract_image_message(image: UploadFile = File(...)):

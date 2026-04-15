@@ -6,7 +6,7 @@ import base64
 import concurrent.futures
 from typing import List, Optional
 from app.audio.service.service import AudioSteganographyEngine
-from app.libs.utils import save_upload_file, calculate_audio_capacity, file_to_base64
+from app.libs.utils import save_upload_file, calculate_audio_capacity, file_to_base64, upload_to_s3
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, APIRouter, Form
 import os
 import time
@@ -53,10 +53,23 @@ async def embed_audio_message(
     if not success:
         raise HTTPException(500, "Error al ocultar mensaje en el audio")
 
+    # Leer base64 antes de subir a S3
+    file_b64 = file_to_base64(output_path)
+
+    # Subir a S3
+    try:
+        upload_to_s3(output_path, filename, data.user_email, "audio")
+    except Exception as e:
+        print(f"⚠️ Error subiendo a S3: {e}")
+    finally:
+        # Limpiar archivo local siempre
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+
     return EmbedResponse(
         status="success",
         message="Mensaje ocultado exitosamente en audio",
-        file_base64=file_to_base64(output_path),
+        file_base64=file_b64,
         payload_size=message_size,
         capacity_used=round((message_size / capacity) * 100, 2),
         file_type="audio"
