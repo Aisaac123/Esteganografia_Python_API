@@ -29,7 +29,7 @@ import boto3
 
 def upload_to_s3(file_path: str, filename: str, user_email: str, file_type: str) -> str:
     """Sube archivo a S3 y retorna la URL prefirmada"""
-    bucket_name = os.environ.get("S3_BUCKET_NAME", "keynography-stego-files")
+    bucket_name = os.environ.get("S3_BUCKET_NAME", "keynography-stego-files-isaac")
     folder = "images" if file_type == "image" else "audios"
     s3_key = f"{folder}/{filename}"
 
