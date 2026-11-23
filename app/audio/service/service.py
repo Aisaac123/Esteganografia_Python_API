@@ -1,6 +1,5 @@
 # Steganografía para audio
 import wave
-import audioop
 from typing import Optional
 
 
